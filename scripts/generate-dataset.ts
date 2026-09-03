@@ -17,19 +17,22 @@ import {
   AutoroutingPipelineSolver7_MultiGraph,
   type SimpleRouteJson,
 } from "@tscircuit/capacity-autorouter";
-import * as dataset01 from "@tscircuit/autorouting-dataset-01";
+import {
+  DATASET_SOURCES,
+  loadDatasetScenarios,
+  type DatasetScenario,
+} from "./dataset-sources";
 
 const SCHEMA_VERSION = 1;
-const DATASET_NAME = "dataset01";
 const SIMPLIFICATION_PHASE = "traceSimplificationSolver";
 const DEFAULT_OUTPUT = "data/dataset.jsonl";
 const AUTOROUTER_GIT_REVISION = "3dbbad3a8a420a6469b5537034c672517264d608";
 
-type DatasetRecord = {
+export type DatasetRecord = {
   schemaVersion: typeof SCHEMA_VERSION;
   problemId: string;
   source: {
-    dataset: typeof DATASET_NAME;
+    dataset: string;
     scenarioName: string;
     sampleNumber: number;
     autorouterGitRevision: string;
@@ -51,17 +54,20 @@ type GeneratorOptions = {
   start: number;
   limit?: number;
   effort: number;
+  datasets: string[];
+  problemTimeoutMs: number;
+  concurrency: number;
 };
 
 type ExpectedProvenance = {
   autorouterGitRevision: string;
-  datasetPackageSpecifier: string;
+  datasetPackageSpecifiers: Record<string, string>;
   effort: number;
 };
 
 type Checkpoint = {
   schemaVersion: typeof SCHEMA_VERSION;
-  dataset: typeof DATASET_NAME;
+  datasets: string[];
   status: "running" | "complete" | "complete_with_errors" | "interrupted";
   totalProblems: number;
   selectedProblems: number;
@@ -71,16 +77,6 @@ type Checkpoint = {
   lastAttemptedProblemId?: string;
   updatedAt: string;
 };
-
-const loadDataset01Scenarios = (): Array<[string, SimpleRouteJson]> =>
-  Object.entries(dataset01)
-    .filter(([name]) => /^circuit\d+$/.test(name))
-    .map(
-      ([name, value]) =>
-        [name, value as SimpleRouteJson] as [string, SimpleRouteJson],
-    )
-    .filter(([, value]) => Boolean(value?.bounds))
-    .sort(([left], [right]) => left.localeCompare(right));
 
 const parsePositiveInteger = (raw: string, flag: string): number => {
   const value = Number.parseInt(raw, 10);
@@ -103,6 +99,9 @@ const parseArgs = (args: string[]): GeneratorOptions => {
     outputPath: path.resolve(DEFAULT_OUTPUT),
     start: 1,
     effort: 1,
+    datasets: ["all"],
+    problemTimeoutMs: 60_000,
+    concurrency: 4,
   };
 
   for (let index = 0; index < args.length; index++) {
@@ -138,17 +137,42 @@ const parseArgs = (args: string[]): GeneratorOptions => {
           })(),
         "--effort",
       );
+    } else if (arg === "--dataset") {
+      const value = args[++index];
+      if (!value) throw new Error("--dataset requires a value");
+      options.datasets = value.split(",").map((name) => name.trim());
+    } else if (arg === "--problem-timeout") {
+      options.problemTimeoutMs =
+        parsePositiveNumber(
+          args[++index] ??
+            (() => {
+              throw new Error("--problem-timeout requires a value");
+            })(),
+          "--problem-timeout",
+        ) * 1_000;
+    } else if (arg === "--concurrency") {
+      options.concurrency = parsePositiveInteger(
+        args[++index] ??
+          (() => {
+            throw new Error("--concurrency requires a value");
+          })(),
+        "--concurrency",
+      );
     } else if (arg === "--help" || arg === "-h") {
       console.log(
         [
-          "Generate Dataset 01 TraceSimplificationSolver JSON-in/JSON-out pairs.",
+          "Generate multi-source TraceSimplificationSolver JSON-in/JSON-out pairs.",
           "",
           `Usage: bun ${path.basename(import.meta.path)} [options]`,
           "",
           `  --output PATH  JSONL destination (default: ${DEFAULT_OUTPUT})`,
-          "  --start N      First 1-based Dataset 01 sample (default: 1)",
+          "  --start N      First 1-based selected sample (default: 1)",
           "  --limit N      Process at most N samples",
           "  --effort N     Pipeline effort (default: 1)",
+          "  --dataset LIST Comma-separated names or all (default: all)",
+          `                 Available: ${DATASET_SOURCES.map(({ name }) => name).join(", ")}`,
+          "  --problem-timeout N  Maximum seconds per problem (default: 60)",
+          "  --concurrency N      Parallel problem workers (default: 4)",
           "",
           "Existing valid records are always resumed by problemId. A partial final",
           "line is truncated automatically. Upstream failures are logged separately",
@@ -250,7 +274,9 @@ export const recoverCompletedProblemIds = async (
       (record.source?.autorouterGitRevision !==
         expectedProvenance.autorouterGitRevision ||
         record.source?.datasetPackageSpecifier !==
-          expectedProvenance.datasetPackageSpecifier ||
+          expectedProvenance.datasetPackageSpecifiers[
+            record.source?.dataset ?? ""
+          ] ||
         record.source?.effort !== expectedProvenance.effort ||
         record.source?.router !== "AutoroutingPipelineSolver7_MultiGraph" ||
         record.source?.simplifier !==
@@ -314,16 +340,14 @@ const runUntilPhase = (
   }
 };
 
-const createRecord = (
-  scenarioName: string,
-  sampleNumber: number,
-  srj: SimpleRouteJson,
+export const createRecord = (
+  scenario: DatasetScenario,
   effort: number,
   autorouterGitRevision: string,
   datasetPackageSpecifier: string,
 ): DatasetRecord => {
   const pipeline = new AutoroutingPipelineSolver7_MultiGraph(
-    structuredClone(srj),
+    structuredClone(scenario.srj),
     { cacheProvider: null, effort },
   );
   runUntilPhase(pipeline, SIMPLIFICATION_PHASE);
@@ -347,11 +371,11 @@ const createRecord = (
 
   return {
     schemaVersion: SCHEMA_VERSION,
-    problemId: `${DATASET_NAME}:${scenarioName}`,
+    problemId: `${scenario.dataset}:${scenario.scenarioName}`,
     source: {
-      dataset: DATASET_NAME,
-      scenarioName,
-      sampleNumber,
+      dataset: scenario.dataset,
+      scenarioName: scenario.scenarioName,
+      sampleNumber: scenario.sampleNumber,
       autorouterGitRevision,
       datasetPackageSpecifier,
       effort,
@@ -364,9 +388,44 @@ const createRecord = (
   };
 };
 
+const createRecordWithTimeout = (
+  scenario: DatasetScenario,
+  effort: number,
+  autorouterGitRevision: string,
+  datasetPackageSpecifier: string,
+  timeoutMs: number,
+): Promise<DatasetRecord> =>
+  new Promise((resolve, reject) => {
+    const worker = new Worker(
+      new URL("./solve-record-worker.ts", import.meta.url).href,
+      { type: "module" },
+    );
+    const timeout = setTimeout(() => {
+      worker.terminate();
+      reject(new Error(`Problem timed out after ${timeoutMs / 1_000}s`));
+    }, timeoutMs);
+    worker.onmessage = (event: MessageEvent) => {
+      clearTimeout(timeout);
+      worker.terminate();
+      if (event.data.ok) resolve(event.data.record as DatasetRecord);
+      else reject(new Error(event.data.error));
+    };
+    worker.onerror = (event: ErrorEvent) => {
+      clearTimeout(timeout);
+      worker.terminate();
+      reject(event.error ?? new Error(event.message));
+    };
+    worker.postMessage({
+      scenario,
+      effort,
+      autorouterGitRevision,
+      datasetPackageSpecifier,
+    });
+  });
+
 const getSourceVersions = async (): Promise<{
   autorouterGitRevision: string;
-  datasetPackageSpecifier: string;
+  datasetPackageSpecifiers: Record<string, string>;
 }> => {
   const packageJson = JSON.parse(
     await readFile(path.resolve("package.json"), "utf8"),
@@ -378,8 +437,15 @@ const getSourceVersions = async (): Promise<{
   }
   return {
     autorouterGitRevision: AUTOROUTER_GIT_REVISION,
-    datasetPackageSpecifier:
-      packageJson.devDependencies["@tscircuit/autorouting-dataset-01"],
+    datasetPackageSpecifiers: Object.fromEntries(
+      DATASET_SOURCES.map(({ name, packageName }) => {
+        const specifier = packageJson.devDependencies[packageName];
+        if (!specifier) {
+          throw new Error(`Missing pinned dependency: ${packageName}`);
+        }
+        return [name, specifier];
+      }),
+    ),
   };
 };
 
@@ -394,7 +460,7 @@ const main = async (): Promise<void> => {
     ...versions,
     effort: options.effort,
   });
-  const scenarios = loadDataset01Scenarios();
+  const scenarios = await loadDatasetScenarios(options.datasets);
   const selected = scenarios.slice(
     options.start - 1,
     options.limit === undefined ? undefined : options.start - 1 + options.limit,
@@ -413,7 +479,7 @@ const main = async (): Promise<void> => {
   const checkpoint = async (status: Checkpoint["status"]): Promise<void> =>
     writeCheckpoint(checkpointPath, {
       schemaVersion: SCHEMA_VERSION,
-      dataset: DATASET_NAME,
+      datasets: [...new Set(selected.map(({ dataset }) => dataset))],
       status,
       totalProblems: scenarios.length,
       selectedProblems: selected.length,
@@ -426,51 +492,70 @@ const main = async (): Promise<void> => {
 
   await checkpoint("running");
   console.log(
-    `Dataset 01: ${completed.size} existing, ${selected.length} selected, ${scenarios.length} total`,
+    `${options.datasets.join(",")}: ${completed.size} existing, ${selected.length} selected, ${scenarios.length} total`,
   );
 
-  for (const [selectedIndex, [scenarioName, srj]] of selected.entries()) {
-    if (interrupted) break;
-    const sampleNumber = options.start + selectedIndex;
-    const problemId = `${DATASET_NAME}:${scenarioName}`;
-    if (completed.has(problemId)) {
-      console.log(`[${sampleNumber}/${scenarios.length}] skip ${problemId}`);
-      continue;
-    }
+  for (
+    let batchStart = 0;
+    batchStart < selected.length && !interrupted;
+    batchStart += options.concurrency
+  ) {
+    const batch = selected.slice(batchStart, batchStart + options.concurrency);
+    const results = await Promise.all(
+      batch.map(async (scenario, batchIndex) => {
+        const globalNumber = options.start + batchStart + batchIndex;
+        const problemId = `${scenario.dataset}:${scenario.scenarioName}`;
+        if (completed.has(problemId)) {
+          console.log(
+            `[${globalNumber}/${scenarios.length}] skip ${problemId}`,
+          );
+          return { scenario, globalNumber, problemId, skipped: true } as const;
+        }
+        lastAttemptedProblemId = problemId;
+        console.log(`[${globalNumber}/${scenarios.length}] solve ${problemId}`);
+        try {
+          const record = await createRecordWithTimeout(
+            scenario,
+            options.effort,
+            versions.autorouterGitRevision,
+            versions.datasetPackageSpecifiers[scenario.dataset],
+            options.problemTimeoutMs,
+          );
+          return { scenario, globalNumber, problemId, record } as const;
+        } catch (error) {
+          return { scenario, globalNumber, problemId, error } as const;
+        }
+      }),
+    );
 
-    lastAttemptedProblemId = problemId;
-    console.log(`[${sampleNumber}/${scenarios.length}] solve ${problemId}`);
-    try {
-      const record = createRecord(
-        scenarioName,
-        sampleNumber,
-        srj,
-        options.effort,
-        versions.autorouterGitRevision,
-        versions.datasetPackageSpecifier,
-      );
-      await appendJsonLine(options.outputPath, record);
-      completed.add(problemId);
-      lastCompletedProblemId = problemId;
-      console.log(
-        `[${sampleNumber}/${scenarios.length}] wrote ${problemId} (${record.input.traces?.length ?? 0} traces)`,
-      );
-    } catch (error) {
-      failed.add(problemId);
+    for (const result of results) {
+      if ("skipped" in result) continue;
+      if ("record" in result && result.record) {
+        const record = result.record;
+        await appendJsonLine(options.outputPath, record);
+        completed.add(result.problemId);
+        lastCompletedProblemId = result.problemId;
+        console.log(
+          `[${result.globalNumber}/${scenarios.length}] wrote ${result.problemId} (${record.input.traces?.length ?? 0} traces)`,
+        );
+        continue;
+      }
+      failed.add(result.problemId);
       await appendFile(
         errorPath,
         `${JSON.stringify({
-          problemId,
-          sampleNumber,
+          problemId: result.problemId,
+          dataset: result.scenario.dataset,
+          sampleNumber: result.scenario.sampleNumber,
           error:
-            error instanceof Error
-              ? (error.stack ?? error.message)
-              : String(error),
+            result.error instanceof Error
+              ? (result.error.stack ?? result.error.message)
+              : String(result.error),
           occurredAt: new Date().toISOString(),
         })}\n`,
       );
       console.error(
-        `[${sampleNumber}/${scenarios.length}] failed ${problemId}: ${error}`,
+        `[${result.globalNumber}/${scenarios.length}] failed ${result.problemId}: ${result.error}`,
       );
     }
     await checkpoint("running");
