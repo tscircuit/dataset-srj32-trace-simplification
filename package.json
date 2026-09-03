@@ -31,6 +31,7 @@
     "format": "biome format --write .",
     "format:check": "biome format .",
     "generate": "bun scripts/generate-dataset.ts",
+    "manifest": "bun scripts/write-manifest.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "validate": "bun scripts/validate-dataset.ts"
@@ -44,10 +45,24 @@
   ],
   "devDependencies": {
     "@biomejs/biome": "^2.5.11",
+    "@tsci/0hmX.multi-component-dataset-srj01": "git+https://github.com/tscircuit/multi-component-dataset-srj01.git#abf9d17c966d466b56ac21b735c6bb6f4518919d",
+    "@tsci/dataset-srj23-partially-routed-subcircuits": "git+https://github.com/tscircuit/dataset-srj23-partially-routed-subcircuits.git#53fc559",
+    "@tsci/seveibar.dataset-srj13": "git+https://github.com/tscircuit/dataset-srj13.git#56db70039aeb28a76540fe951b5a96be60f9e949",
+    "@tsci/tscircuit.dataset-srj12-bus-routing": "git+https://github.com/tscircuit/dataset-srj12-bus-routing.git#ba82f86a7d1288566b7144eb8661ad2549c5f328",
+    "@tsci/tscircuit.dataset-srj16-bga-breakouts": "git+https://github.com/tscircuit/dataset-srj16-bga-breakouts.git#e8b2e70e1f50a0dba3ad977e140766f53b9b75fb",
+    "@tsci/tscircuit.dataset-srj19-bga-passive-overlays": "git+https://github.com/tscircuit/dataset-srj19.git#5104d03ed72a9090d76ea1f42ae9f4bc439f7534",
+    "@tsci/tscircuit.dataset-srj20-partial-bga-breakouts": "git+https://github.com/tscircuit/dataset-srj20.git#9384fb8f45fb479b97178ddfa42fc74c69afbbec",
+    "@tsci/tscircuit.dataset-srj29-bga-decoupling": "github:tscircuit/dataset-srj29-bga-decoupling#bfdf7bc",
     "@tscircuit/autorouting-dataset-01": "git+https://github.com/tscircuit/autorouting-dataset-01.git#b97f5052a2359ab2da3f186765c6a5e839535efb",
     "@tscircuit/capacity-autorouter": "0.0.869",
+    "@tscircuit/dataset-srj05": "git+https://github.com/tscircuit/dataset-srj05.git#9a49c126a89c083dc4d2b72cd17184735f637762",
+    "@tscircuit/dataset-srj24": "git+https://github.com/tscircuit/dataset-srj24.git#0973fa8a123276ff0f5de1fc7edef31efccb9cc9",
+    "@tscircuit/dataset-srj27-power-traces": "git+https://github.com/tscircuit/dataset-srj27-power-traces.git#eb24d36",
+    "@tscircuit/dataset-srj28-partially-prerouted": "git+https://github.com/tscircuit/dataset-srj28-partially-prerouted.git#5b1673544b6ade4480612539ba6574ad414fddc0",
     "@tscircuit/solver-utils": "^0.0.16",
     "@types/bun": "latest",
+    "dataset-srj11-45-degree": "git+https://github.com/tscircuit/dataset-srj11-45-degree.git#c49dd43c38f85fa2777c7d67393df413ca8d5a75",
+    "dataset-srj18": "git+https://github.com/tscircuit/dataset-srj18.git#c0aad90256a95256fcac814f9f7da81a82a2fdea",
     "typescript": "^5.9.3"
   }
 }

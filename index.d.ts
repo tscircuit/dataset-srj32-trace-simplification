@@ -10,7 +10,7 @@ export interface TraceSimplificationDatasetRecord {
   schemaVersion: 1;
   problemId: string;
   source: {
-    dataset: "dataset01";
+    dataset: string;
     scenarioName: string;
     sampleNumber: number;
     autorouterGitRevision: string;
@@ -36,6 +36,11 @@ export interface DatasetManifest {
   outputRoutePointCount: number;
   dataFile: string;
   dataFileSha256: string;
+  sources: Array<{
+    dataset: string;
+    packageSpecifier: string;
+    recordCount: number;
+  }>;
   [key: string]: unknown;
 }
 
