@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "name": "dataset-srj32-trace-simplification",
+  "format": "newline-delimited-json",
+  "dataFile": "data/dataset.jsonl",
+  "dataFileSha256": "acedfe7d335be0e809140b0604a44f2b0bef9ef025f179419148d503db2f6a5e",
+  "recordCount": 85,
+  "inputTraceCount": 2471,
+  "outputTraceCount": 2471,
+  "inputRoutePointCount": 167784,
+  "outputRoutePointCount": 33211,
+  "source": {
+    "dataset": "@tscircuit/autorouting-dataset-01",
+    "datasetGitRevision": "b97f5052a2359ab2da3f186765c6a5e839535efb",
+    "autorouterGitRevision": "3dbbad3a8a420a6469b5537034c672517264d608",
+    "router": "AutoroutingPipelineSolver7_MultiGraph",
+    "simplifier": "AutoroutingPipelineSolver11_Simplification",
+    "simplificationOptions": {
+      "iterations": 2,
+      "enableCrossingViaReduction": true
+    }
+  }
+}

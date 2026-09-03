@@ -1,0 +1,53 @@
+{
+  "name": "@tscircuit/dataset-srj32-trace-simplification",
+  "version": "0.0.1",
+  "description": "Pipeline 7 stitched traces paired with Pipeline 11 simplified Simple Route JSON outputs",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js"
+    }
+  },
+  "files": [
+    "data",
+    "index.js",
+    "index.d.ts",
+    "manifest.json",
+    "LICENSE",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tscircuit/dataset-srj32-trace-simplification.git"
+  },
+  "scripts": {
+    "check": "bun run format:check && bun run typecheck && bun run validate && bun test",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "generate": "bun scripts/generate-dataset.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "validate": "bun scripts/validate-dataset.ts"
+  },
+  "keywords": [
+    "tscircuit",
+    "simple-route-json",
+    "dataset",
+    "trace-simplification",
+    "autorouter"
+  ],
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.11",
+    "@tscircuit/autorouting-dataset-01": "git+https://github.com/tscircuit/autorouting-dataset-01.git#b97f5052a2359ab2da3f186765c6a5e839535efb",
+    "@tscircuit/capacity-autorouter": "0.0.869",
+    "@tscircuit/solver-utils": "^0.0.16",
+    "@types/bun": "latest",
+    "typescript": "^5.9.3"
+  }
+}
